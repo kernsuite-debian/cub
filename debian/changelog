@@ -1,3 +1,12 @@
+cub (1.7.4-1kern1) xenial; urgency=medium
+
+  * add watch file
+  * shouldnt be here
+  * modernise
+  * Imported Upstream version 1.7.4
+
+ -- KERN packaging <packaging@kernsuite.info>  Tue, 07 Nov 2017 15:25:01 +0200
+
 cub (1.6.4-1) xenial; urgency=low
 
   * Initial release
