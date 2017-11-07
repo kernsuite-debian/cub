@@ -1,6 +1,6 @@
 /******************************************************************************
  * Copyright (c) 2011, Duane Merrill.  All rights reserved.
- * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -36,15 +36,15 @@
 #include <stdio.h>
 #include <typeinfo>
 
+#include <thrust/device_ptr.h>
+#include <thrust/reduce.h>
+#include <thrust/iterator/constant_iterator.h>
+
 #include <cub/util_allocator.cuh>
 #include <cub/iterator/constant_input_iterator.cuh>
 #include <cub/device/device_reduce.cuh>
 #include <cub/device/device_run_length_encode.cuh>
 #include <cub/thread/thread_operators.cuh>
-
-#include <thrust/device_ptr.h>
-#include <thrust/reduce.h>
-#include <thrust/iterator/constant_iterator.h>
 
 #include "test_util.h"
 
@@ -251,7 +251,7 @@ cudaError_t Dispatch(
                 d_lengths_out_wrapper);
         }
 
-        OffsetT num_runs = d_out_ends.first - d_unique_out_wrapper;
+        OffsetT num_runs = OffsetT(d_out_ends.first - d_unique_out_wrapper);
         CubDebugExit(cudaMemcpy(d_num_runs, &num_runs, sizeof(OffsetT), cudaMemcpyHostToDevice));
     }
 

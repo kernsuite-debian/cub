@@ -1,6 +1,6 @@
 /******************************************************************************
  * Copyright (c) 2011, Duane Merrill.  All rights reserved.
- * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -35,6 +35,9 @@
 
 #include <stdio.h>
 #include <typeinfo>
+
+#include <thrust/device_ptr.h>
+#include <thrust/unique.h>
 
 #include <cub/util_allocator.cuh>
 #include <cub/iterator/counting_input_iterator.cuh>
@@ -148,7 +151,7 @@ cudaError_t Dispatch(
             d_out_wrapper_end = thrust::unique_copy(d_in_wrapper, d_in_wrapper + num_items, d_out_wrapper);
         }
 
-        OffsetT num_selected = d_out_wrapper_end - d_out_wrapper;
+        OffsetT num_selected = OffsetT(d_out_wrapper_end - d_out_wrapper);
         CubDebugExit(cudaMemcpy(d_num_selected_out, &num_selected, sizeof(OffsetT), cudaMemcpyHostToDevice));
 
     }
@@ -592,7 +595,7 @@ int main(int argc, char** argv)
     if (num_items < 0) num_items = 32000000;
 
     printf("-- Iterator ----------------------------\n");
-    TestIterator<CUB, int>(        num_items,                                 entropy_reduction, maxseg);
+    TestIterator<CUB, int>(        num_items);
 
     printf("----------------------------\n");
     TestPointer<CUB, char>(        num_items * ((sm_version <= 130) ? 1 : 4), entropy_reduction, maxseg);
