@@ -1,6 +1,6 @@
 /******************************************************************************
  * Copyright (c) 2011, Duane Merrill.  All rights reserved.
- * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -36,15 +36,15 @@
 #include <stdio.h>
 #include <typeinfo>
 
-#include <cub/util_allocator.cuh>
-#include <cub/device/device_select.cuh>
-#include <cub/device/device_partition.cuh>
-#include <cub/iterator/counting_input_iterator.cuh>
-
 #include <thrust/device_ptr.h>
 #include <thrust/copy.h>
 #include <thrust/partition.h>
 #include <thrust/iterator/reverse_iterator.h>
+
+#include <cub/util_allocator.cuh>
+#include <cub/device/device_select.cuh>
+#include <cub/device/device_partition.cuh>
+#include <cub/iterator/counting_input_iterator.cuh>
 
 #include "test_util.h"
 
@@ -273,7 +273,7 @@ cudaError_t Dispatch(
             d_out_wrapper_end = thrust::copy_if(d_in_wrapper, d_in_wrapper + num_items, d_out_wrapper, select_op);
         }
 
-        OffsetT num_selected = d_out_wrapper_end - d_out_wrapper;
+        OffsetT num_selected = OffsetT(d_out_wrapper_end - d_out_wrapper);
         CubDebugExit(cudaMemcpy(d_num_selected_out, &num_selected, sizeof(OffsetT), cudaMemcpyHostToDevice));
     }
 
@@ -338,7 +338,7 @@ cudaError_t Dispatch(
                 select_op);
         }
 
-        OffsetT num_selected = d_out_wrapper_end.first - d_out_wrapper;
+        OffsetT num_selected = OffsetT(d_out_wrapper_end.first - d_out_wrapper);
         CubDebugExit(cudaMemcpy(d_num_selected_out, &num_selected, sizeof(OffsetT), cudaMemcpyHostToDevice));
     }
 
@@ -394,10 +394,10 @@ cudaError_t Dispatch(
 
         for (int i = 0; i < timing_timing_iterations; ++i)
         {
-            d_out_wrapper_end = thrust::copy_if(d_in_wrapper, d_in_wrapper + num_items, d_flags_wrapper, d_out_wrapper, Cast<bool>());
+            d_out_wrapper_end = thrust::copy_if(d_in_wrapper, d_in_wrapper + num_items, d_flags_wrapper, d_out_wrapper, CastOp<bool>());
         }
 
-        OffsetT num_selected = d_out_wrapper_end - d_out_wrapper;
+        OffsetT num_selected = OffsetT(d_out_wrapper_end - d_out_wrapper);
         CubDebugExit(cudaMemcpy(d_num_selected_out, &num_selected, sizeof(OffsetT), cudaMemcpyHostToDevice));
     }
 
@@ -463,10 +463,10 @@ cudaError_t Dispatch(
                 d_flags_wrapper,
                 d_out_wrapper,
                 d_out_unselected,
-                Cast<bool>());
+                CastOp<bool>());
         }
 
-        OffsetT num_selected = d_out_wrapper_end.first - d_out_wrapper;
+        OffsetT num_selected = OffsetT(d_out_wrapper_end.first - d_out_wrapper);
         CubDebugExit(cudaMemcpy(d_num_selected_out, &num_selected, sizeof(OffsetT), cudaMemcpyHostToDevice));
     }
 

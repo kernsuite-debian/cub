@@ -1,6 +1,6 @@
 /******************************************************************************
  * Copyright (c) 2011, Duane Merrill.  All rights reserved.
- * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -46,6 +46,8 @@ namespace cub {
 
 /**
  * \brief WarpScanShfl provides SHFL-based variants of parallel prefix scan of items partitioned across a CUDA thread warp.
+ *
+ * LOGICAL_WARP_THREADS must be a power-of-two
  */
 template <
     typename    T,                      ///< Data type being scanned
@@ -66,7 +68,7 @@ struct WarpScanShfl
         STEPS = Log2<LOGICAL_WARP_THREADS>::VALUE,
 
         /// The 5-bit SHFL mask for logically splitting warps into sub-segments starts 8-bits up
-        SHFL_C = ((-1 << STEPS) & 31) << 8,
+        SHFL_C = ((0xFFFFFFFFU << STEPS) & 31) << 8,
     };
 
     template <typename S>
@@ -88,6 +90,8 @@ struct WarpScanShfl
 
     unsigned int lane_id;
 
+    unsigned int member_mask;
+
     //---------------------------------------------------------------------
     // Construction
     //---------------------------------------------------------------------
@@ -96,9 +100,11 @@ struct WarpScanShfl
     __device__ __forceinline__ WarpScanShfl(
         TempStorage &/*temp_storage*/)
     :
-        lane_id(IS_ARCH_WARP ?
-            LaneId() :
-            LaneId() % LOGICAL_WARP_THREADS)
+        lane_id(LaneId()),
+
+        member_mask((0xffffffff >> (32 - LOGICAL_WARP_THREADS)) << ((IS_ARCH_WARP) ?
+            0 : // arch-width subwarps need not be tiled within the arch-warp
+            ((lane_id / LOGICAL_WARP_THREADS) * LOGICAL_WARP_THREADS)))
     {}
 
 
@@ -117,6 +123,17 @@ struct WarpScanShfl
         int shfl_c = first_lane | SHFL_C;   // Shuffle control (mask and first-lane)
 
         // Use predicate set from SHFL to guard against invalid peers
+#ifdef CUB_USE_COOPERATIVE_GROUPS
+        asm volatile(
+            "{"
+            "  .reg .s32 r0;"
+            "  .reg .pred p;"
+            "  shfl.sync.up.b32 r0|p, %1, %2, %3, %5;"
+            "  @p add.s32 r0, r0, %4;"
+            "  mov.s32 %0, r0;"
+            "}"
+            : "=r"(output) : "r"(input), "r"(offset), "r"(shfl_c), "r"(input), "r"(member_mask));
+#else
         asm volatile(
             "{"
             "  .reg .s32 r0;"
@@ -126,6 +143,7 @@ struct WarpScanShfl
             "  mov.s32 %0, r0;"
             "}"
             : "=r"(output) : "r"(input), "r"(offset), "r"(shfl_c), "r"(input));
+#endif
 
         return output;
     }
@@ -141,6 +159,17 @@ struct WarpScanShfl
         int shfl_c = first_lane | SHFL_C;   // Shuffle control (mask and first-lane)
 
         // Use predicate set from SHFL to guard against invalid peers
+#ifdef CUB_USE_COOPERATIVE_GROUPS
+        asm volatile(
+            "{"
+            "  .reg .u32 r0;"
+            "  .reg .pred p;"
+            "  shfl.sync.up.b32 r0|p, %1, %2, %3, %5;"
+            "  @p add.u32 r0, r0, %4;"
+            "  mov.u32 %0, r0;"
+            "}"
+            : "=r"(output) : "r"(input), "r"(offset), "r"(shfl_c), "r"(input), "r"(member_mask));
+#else
         asm volatile(
             "{"
             "  .reg .u32 r0;"
@@ -150,6 +179,7 @@ struct WarpScanShfl
             "  mov.u32 %0, r0;"
             "}"
             : "=r"(output) : "r"(input), "r"(offset), "r"(shfl_c), "r"(input));
+#endif
 
         return output;
     }
@@ -166,6 +196,17 @@ struct WarpScanShfl
         int shfl_c = first_lane | SHFL_C;   // Shuffle control (mask and first-lane)
 
         // Use predicate set from SHFL to guard against invalid peers
+#ifdef CUB_USE_COOPERATIVE_GROUPS
+        asm volatile(
+            "{"
+            "  .reg .f32 r0;"
+            "  .reg .pred p;"
+            "  shfl.sync.up.b32 r0|p, %1, %2, %3, %5;"
+            "  @p add.f32 r0, r0, %4;"
+            "  mov.f32 %0, r0;"
+            "}"
+            : "=f"(output) : "f"(input), "r"(offset), "r"(shfl_c), "f"(input), "r"(member_mask));
+#else
         asm volatile(
             "{"
             "  .reg .f32 r0;"
@@ -175,6 +216,7 @@ struct WarpScanShfl
             "  mov.f32 %0, r0;"
             "}"
             : "=f"(output) : "f"(input), "r"(offset), "r"(shfl_c), "f"(input));
+#endif
 
         return output;
     }
@@ -191,6 +233,22 @@ struct WarpScanShfl
         int shfl_c = first_lane | SHFL_C;   // Shuffle control (mask and first-lane)
 
         // Use predicate set from SHFL to guard against invalid peers
+#ifdef CUB_USE_COOPERATIVE_GROUPS
+        asm volatile(
+            "{"
+            "  .reg .u64 r0;"
+            "  .reg .u32 lo;"
+            "  .reg .u32 hi;"
+            "  .reg .pred p;"
+            "  mov.b64 {lo, hi}, %1;"
+            "  shfl.sync.up.b32 lo|p, lo, %2, %3, %5;"
+            "  shfl.sync.up.b32 hi|p, hi, %2, %3, %5;"
+            "  mov.b64 r0, {lo, hi};"
+            "  @p add.u64 r0, r0, %4;"
+            "  mov.u64 %0, r0;"
+            "}"
+            : "=l"(output) : "l"(input), "r"(offset), "r"(shfl_c), "l"(input), "r"(member_mask));
+#else
         asm volatile(
             "{"
             "  .reg .u64 r0;"
@@ -205,6 +263,7 @@ struct WarpScanShfl
             "  mov.u64 %0, r0;"
             "}"
             : "=l"(output) : "l"(input), "r"(offset), "r"(shfl_c), "l"(input));
+#endif
 
         return output;
     }
@@ -221,6 +280,22 @@ struct WarpScanShfl
         int shfl_c = first_lane | SHFL_C;   // Shuffle control (mask and first-lane)
 
         // Use predicate set from SHFL to guard against invalid peers
+#ifdef CUB_USE_COOPERATIVE_GROUPS
+        asm volatile(
+            "{"
+            "  .reg .s64 r0;"
+            "  .reg .u32 lo;"
+            "  .reg .u32 hi;"
+            "  .reg .pred p;"
+            "  mov.b64 {lo, hi}, %1;"
+            "  shfl.sync.up.b32 lo|p, lo, %2, %3, %5;"
+            "  shfl.sync.up.b32 hi|p, hi, %2, %3, %5;"
+            "  mov.b64 r0, {lo, hi};"
+            "  @p add.s64 r0, r0, %4;"
+            "  mov.s64 %0, r0;"
+            "}"
+            : "=l"(output) : "l"(input), "r"(offset), "r"(shfl_c), "l"(input), "r"(member_mask));
+#else
         asm volatile(
             "{"
             "  .reg .s64 r0;"
@@ -235,6 +310,7 @@ struct WarpScanShfl
             "  mov.s64 %0, r0;"
             "}"
             : "=l"(output) : "l"(input), "r"(offset), "r"(shfl_c), "l"(input));
+#endif
 
         return output;
     }
@@ -251,6 +327,22 @@ struct WarpScanShfl
         int shfl_c = first_lane | SHFL_C;   // Shuffle control (mask and first-lane)
 
         // Use predicate set from SHFL to guard against invalid peers
+#ifdef CUB_USE_COOPERATIVE_GROUPS
+        asm volatile(
+            "{"
+            "  .reg .u32 lo;"
+            "  .reg .u32 hi;"
+            "  .reg .pred p;"
+            "  .reg .f64 r0;"
+            "  mov.b64 %0, %1;"
+            "  mov.b64 {lo, hi}, %1;"
+            "  shfl.sync.up.b32 lo|p, lo, %2, %3, %4;"
+            "  shfl.sync.up.b32 hi|p, hi, %2, %3, %4;"
+            "  mov.b64 r0, {lo, hi};"
+            "  @p add.f64 %0, %0, r0;"
+            "}"
+            : "=d"(output) : "d"(input), "r"(offset), "r"(shfl_c), "r"(member_mask));
+#else
         asm volatile(
             "{"
             "  .reg .u32 lo;"
@@ -265,6 +357,7 @@ struct WarpScanShfl
             "  @p add.f64 %0, %0, r0;"
             "}"
             : "=d"(output) : "d"(input), "r"(offset), "r"(shfl_c));
+#endif
 
         return output;
     }
@@ -299,7 +392,7 @@ struct WarpScanShfl
         int             first_lane,         ///< [in] Index of first lane in segment
         int             offset)             ///< [in] Up-offset to pull from
     {
-        _T temp = ShuffleUp(input, offset, first_lane);
+        _T temp = ShuffleUp(input, offset, first_lane, member_mask);
 
         // Perform scan op if from a valid peer
         _T output = scan_op(temp, input);
@@ -319,11 +412,7 @@ struct WarpScanShfl
         int             offset,             ///< [in] Up-offset to pull from
         Int2Type<true>  /*is_small_unsigned*/)  ///< [in] Marker type indicating whether T is a small integer
     {
-        unsigned int temp = reinterpret_cast<unsigned int &>(input);
-
-        temp = InclusiveScanStep(temp, scan_op, first_lane, offset);
-
-        return reinterpret_cast<_T&>(temp);
+        return InclusiveScanStep(input, scan_op, first_lane, offset);
     }
 
 
@@ -377,7 +466,7 @@ struct WarpScanShfl
         T               input,              ///< [in] The value to broadcast
         int             src_lane)           ///< [in] Which warp lane is to do the broadcasting
     {
-        return ShuffleIndex(input, src_lane, LOGICAL_WARP_THREADS);
+        return ShuffleIndex(input, src_lane, LOGICAL_WARP_THREADS, member_mask);
     }
 
 
@@ -423,9 +512,9 @@ struct WarpScanShfl
     {
         inclusive_output = input;
 
-        KeyT pred_key = ShuffleUp(inclusive_output.key, 1);
+        KeyT pred_key = ShuffleUp(inclusive_output.key, 1, 0, member_mask);
 
-        unsigned int ballot = __ballot((pred_key != inclusive_output.key));
+        unsigned int ballot = WARP_BALLOT((pred_key != inclusive_output.key), member_mask);
 
         // Mask away all lanes greater than ours
         ballot = ballot & LaneMaskLe();
@@ -461,7 +550,7 @@ struct WarpScanShfl
         InclusiveScan(input, inclusive_output, scan_op);
 
         // Grab aggregate from last warp lane
-        warp_aggregate = ShuffleIndex(inclusive_output, LOGICAL_WARP_THREADS - 1, LOGICAL_WARP_THREADS);
+        warp_aggregate = ShuffleIndex(inclusive_output, LOGICAL_WARP_THREADS - 1, LOGICAL_WARP_THREADS, member_mask);
     }
 
 
@@ -479,7 +568,7 @@ struct WarpScanShfl
         IsIntegerT              /*is_integer*/)     ///< [in]
     {
         // initial value unknown
-        exclusive = ShuffleUp(inclusive, 1);
+        exclusive = ShuffleUp(inclusive, 1, 0, member_mask);
     }
 
     /// Update inclusive and exclusive using input and inclusive (specialized for summation of integer types)
@@ -505,8 +594,13 @@ struct WarpScanShfl
         IsIntegerT              /*is_integer*/)
     {
         inclusive = scan_op(initial_value, inclusive);
-        exclusive = ShuffleUp(inclusive, 1);
-        if (lane_id == 0)
+        exclusive = ShuffleUp(inclusive, 1, 0, member_mask);
+
+        unsigned int segment_id = (IS_ARCH_WARP) ?
+            lane_id :
+            lane_id % LOGICAL_WARP_THREADS;
+
+        if (segment_id == 0)
             exclusive = initial_value;
     }
 
@@ -534,7 +628,7 @@ struct WarpScanShfl
         ScanOpT                 scan_op,
         IsIntegerT              is_integer)
     {
-        warp_aggregate = ShuffleIndex(inclusive, LOGICAL_WARP_THREADS - 1, LOGICAL_WARP_THREADS);
+        warp_aggregate = ShuffleIndex(inclusive, LOGICAL_WARP_THREADS - 1, LOGICAL_WARP_THREADS, member_mask);
         Update(input, inclusive, exclusive, scan_op, is_integer);
     }
 
@@ -549,7 +643,7 @@ struct WarpScanShfl
         T                       initial_value,
         IsIntegerT              is_integer)
     {
-        warp_aggregate = ShuffleIndex(inclusive, LOGICAL_WARP_THREADS - 1, LOGICAL_WARP_THREADS);
+        warp_aggregate = ShuffleIndex(inclusive, LOGICAL_WARP_THREADS - 1, LOGICAL_WARP_THREADS, member_mask);
         Update(input, inclusive, exclusive, scan_op, initial_value, is_integer);
     }
 

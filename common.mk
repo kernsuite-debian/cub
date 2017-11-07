@@ -1,6 +1,6 @@
 #/******************************************************************************
 # * Copyright (c) 2011, Duane Merrill.  All rights reserved.
-# * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
+# * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
 # * 
 # * Redistribution and use in source and binary forms, with or without
 # * modification, are permitted provided that the following conditions are met:
@@ -40,6 +40,11 @@ else
     SM_ARCH = 200
 endif
 
+ifeq (700, $(findstring 700, $(SM_ARCH)))
+    SM_TARGETS 	+= -gencode=arch=compute_70,code=\"sm_70,compute_70\" 
+    SM_DEF 		+= -DSM700
+    TEST_ARCH 	= 700
+endif
 ifeq (620, $(findstring 620, $(SM_ARCH)))
     SM_TARGETS 	+= -gencode=arch=compute_62,code=\"sm_62,compute_62\" 
     SM_DEF 		+= -DSM620
@@ -124,7 +129,7 @@ ifeq ($(force32), 1)
 else
 	CPU_ARCH = -m64
 	CPU_ARCH_SUFFIX = x86_64
-    NPPI = -lnppi
+    NPPI = -lnppist
 endif
 
 

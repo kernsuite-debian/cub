@@ -1,6 +1,6 @@
 /******************************************************************************
  * Copyright (c) 2011, Duane Merrill.  All rights reserved.
- * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -778,7 +778,10 @@ template <int LOGICAL_WARP_THREADS>
 void Test()
 {
     Test<1, LOGICAL_WARP_THREADS>();
-    Test<2, LOGICAL_WARP_THREADS>();
+
+    // Only power-of-two subwarps can be tiled
+    if ((LOGICAL_WARP_THREADS == 32) || PowerOfTwo<LOGICAL_WARP_THREADS>::VALUE)
+        Test<2, LOGICAL_WARP_THREADS>();
 }
 
 
@@ -814,10 +817,6 @@ int main(int argc, char** argv)
     TestReduce<1, 32, double>(UNIFORM, Sum());
     TestReduce<2, 16, TestBar>(UNIFORM, Sum());
     TestSegmentedReduce<1, 32, int>(UNIFORM, 1, Sum());
-
-    typedef KeyValuePair<int, float> T;
-    cub::Sum sum_op;
-    TestReduce<1, 32, T>(UNIFORM, ReduceBySegmentOp<cub::Sum>(sum_op));
 
 #else
 
