@@ -1,0 +1,20 @@
+cub (1.8.0-1kern1) bionic; urgency=medium
+
+  * New upstream version 1.8.0
+
+ -- KERN packaging <packaging@kernsuite.info>  Fri, 18 May 2018 09:33:14 +0000
+
+cub (1.7.4-1kern1) xenial; urgency=medium
+
+  * add watch file
+  * shouldnt be here
+  * modernise
+  * Imported Upstream version 1.7.4
+
+ -- KERN packaging <packaging@kernsuite.info>  Tue, 07 Nov 2017 15:25:01 +0200
+
+cub (1.6.4-1) xenial; urgency=low
+
+  * Initial release
+
+ -- Gijs Molenaar (launchpad ppa build key) <gijs@pythonic.nl>  Thu, 09 Feb 2017 12:07:19 +0200
